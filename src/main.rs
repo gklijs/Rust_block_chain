@@ -10,17 +10,22 @@ mod blockchain;
 fn main() {
     let mut miner_addr = String::new();
     let mut difficulty = String::new();
+    let mut threadcount = String::new();
     let mut choice = String::new();
 
+    print!("Threads used for proof of work: ");
+    io::stdout().flush();
+    io::stdin().read_line(&mut threadcount);
+    let threads = threadcount.trim().parse::<i32>().expect("we need a integer");
     print!("input a miner address: ");
     io::stdout().flush();
     io::stdin().read_line(&mut miner_addr);
     print!("Difficulty: ");
     io::stdout().flush();
     io::stdin().read_line(&mut difficulty);
-    let diff = difficulty.trim().parse::<u32>().expect("we need an integer");
-    println!("generating genesis block! ");
-    let mut chain = blockchain::Chain::new(miner_addr.trim().to_string(), diff);
+    let diff = difficulty.trim().parse::<i32>().expect("we need an integer");
+    println!("generating genesis block!");
+    let mut chain = blockchain::Chain::new(miner_addr.trim().to_string(), diff, threads);
 
     loop {
         println!("Menu");
@@ -68,7 +73,7 @@ fn main() {
             2 =>
             {
                 println!("Generating block");
-                let res = chain.generate_new_block();
+                let res = chain.generate_new_block(threads);
                 match res {
                     true => println!("Block generated successfully"),
                     false => println!("Block generation failed"),
