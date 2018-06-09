@@ -1,10 +1,9 @@
 extern crate time;
 extern crate serde;
 extern crate serde_json;
-extern crate sha2;
+extern crate blake2_rfc;
 
 use std::thread;
-use self::sha2::{Sha256, Digest};
 use std::fmt::Write;
 use std::sync::mpsc::Sender;
 use std::sync::mpsc;
@@ -160,11 +159,9 @@ impl Chain {
     pub fn hash<T: serde::Serialize>(item: &T) -> String {
         let input = serde_json::to_string(&item).unwrap();
         //println!("Input for hash: {}", input);
-        let mut hasher = Sha256::default();
-        hasher.input(input.as_bytes());
-        let res = hasher.result();
-        let vec_res = res.to_vec();
-        Chain::hex_to_string(vec_res.as_slice())
+        let hasher = blake2_rfc::blake2s::blake2s(32, &[],input.as_bytes());
+        let vec_res = hasher.as_bytes();
+        Chain::hex_to_string(vec_res)
     }
 
     pub fn hex_to_string(vec_res: &[u8]) -> String {
@@ -179,23 +176,24 @@ impl Chain {
 fn proof_thread(header: &mut Blockheader, threads: i32, result_found: Arc<AtomicBool>, sender: Sender<i32>) {
     while !(*result_found).load(Ordering::Relaxed) {
         let hash = Chain::hash(header);
-        let slice = &hash[..header.difficulty as usize];
-        //println!("Tried nonce: {} resulted in slice: {}", header.nonce, slice);
-        match slice.parse::<u32>() {
-            Ok(val) => {
-                if val != 0 {
-                    header.nonce += threads;
-                } else {
-                    println!("Block hash: {}", hash);
-                    break;
-                }
-            },
-            Err(_) => {
-                header.nonce += threads;
-                continue;
+        if all_zeros(&hash[..header.difficulty as usize]){
+            println!("Block hash: {}", hash);
+            match sender.send(header.nonce) {
+                Result::Ok(_val) => println!("Send solution {} with success", header.nonce),
+                Err(err) => println!("Error: {} sending nonce: {}", err, header.nonce)
             }
-        };
+            (*result_found).store(true, Ordering::Relaxed);
+        }else{
+            header.nonce += threads;
+        }
     }
-    (*result_found).store(true, Ordering::Relaxed);
-    sender.send(header.nonce);
+}
+
+fn all_zeros (start: &str) -> bool {
+    for c in start.chars(){
+        if c != '0'{
+            return false
+        }
+    }
+    true
 }
